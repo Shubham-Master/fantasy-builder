@@ -9,6 +9,7 @@ type Player = {
   name: string;
   team: string;
   role: Role;
+  probable: boolean;
 };
 
 type SavedTeam = {
@@ -42,6 +43,58 @@ const TEAM_COLORS = [
   { bg: "bg-purple-600", text: "text-purple-300" },
 ];
 
+// ============ SEED PLAYER ROLES (IPL) ============
+const SEED_ROLES: Record<string, Role> = {
+  // Wicketkeepers
+  "MS Dhoni": "WK", "Rishabh Pant": "WK", "Sanju Samson": "WK", "KL Rahul": "WK",
+  "Quinton de Kock": "WK", "Jos Buttler": "WK", "Jitesh Sharma": "WK",
+  "Phil Salt": "WK", "Philip Salt": "WK", "Ishan Kishan": "WK",
+  "Prabhsimran Singh": "WK", "Heinrich Klaasen": "WK", "Jonny Bairstow": "WK",
+  "Dhruv Jurel": "WK", "Wriddhiman Saha": "WK", "Jordan Cox": "WK",
+  "N Jagadeesan": "WK", "Vishnu Vinod": "WK", "Kumar Sangakkara": "WK",
+  // Batters
+  "Virat Kohli": "BAT", "Rohit Sharma": "BAT", "Shubman Gill": "BAT",
+  "Yashasvi Jaiswal": "BAT", "Suryakumar Yadav": "BAT", "Devdutt Padikkal": "BAT",
+  "Shreyas Iyer": "BAT", "Rajat Patidar": "BAT", "Tilak Varma": "BAT",
+  "Sai Sudharsan": "BAT", "B Sai Sudharsan": "BAT", "Faf du Plessis": "BAT",
+  "David Warner": "BAT", "Priyansh Arya": "BAT", "Jacob Bethell": "BAT",
+  "Travis Head": "BAT", "Abhishek Sharma": "BAT", "Will Jacks": "BAT",
+  "Tim David": "BAT", "Ruturaj Gaikwad": "BAT", "Riyan Parag": "BAT",
+  "Karun Nair": "BAT", "Aiden Markram": "BAT", "Rinku Singh": "BAT",
+  "Mayank Agarwal": "BAT", "Nehal Wadhera": "BAT", "Harnoor Singh": "BAT",
+  "Vihaan Malhotra": "BAT", "Anuj Rawat": "BAT", "Abhishek Porel": "BAT",
+  // All-rounders
+  "Hardik Pandya": "AR", "Krunal Pandya": "AR", "Ravindra Jadeja": "AR",
+  "Axar Patel": "AR", "Glenn Maxwell": "AR", "Cameron Green": "AR",
+  "Andre Russell": "AR", "Sunil Narine": "AR", "Marcus Stoinis": "AR",
+  "Shivam Dube": "AR", "Nitish Reddy": "AR", "Rachin Ravindra": "AR",
+  "Mitchell Marsh": "AR", "Marco Jansen": "AR", "Azmatullah Omarzai": "AR",
+  "Shashank Singh": "AR", "Venkatesh Iyer": "AR", "Cooper Connolly": "AR",
+  "Harpreet Brar": "AR", "Mitchell Owen": "AR", "Romario Shepherd": "AR",
+  "Suryansh Shedge": "AR", "Washington Sundar": "AR", "Sai Kishore": "AR",
+  "R Sai Kishore": "AR", "Liam Livingstone": "AR", "Moeen Ali": "AR",
+  "Wanindu Hasaranga": "AR", "Dunith Wellalage": "AR", "Ramandeep Singh": "AR",
+  // Bowlers
+  "Jasprit Bumrah": "BWL", "Mohammed Shami": "BWL", "Mohammed Siraj": "BWL",
+  "Arshdeep Singh": "BWL", "Yuzvendra Chahal": "BWL", "Kuldeep Yadav": "BWL",
+  "Rashid Khan": "BWL", "Rashid-Khan": "BWL", "Lockie Ferguson": "BWL",
+  "Bhuvneshwar Kumar": "BWL", "Josh Hazlewood": "BWL", "Pat Cummins": "BWL",
+  "Trent Boult": "BWL", "T Natarajan": "BWL", "Mitchell Starc": "BWL",
+  "Mukesh Kumar": "BWL", "Khaleel Ahmed": "BWL", "Tushar Deshpande": "BWL",
+  "Avesh Khan": "BWL", "Umran Malik": "BWL", "Harshit Rana": "BWL",
+  "Akash Madhwal": "BWL", "Varun Chakaravarthy": "BWL", "Sandeep Sharma": "BWL",
+  "Mohit Sharma": "BWL", "Anrich Nortje": "BWL", "Kagiso Rabada": "BWL",
+  "Jofra Archer": "BWL", "Matheesha Pathirana": "BWL", "Jacob Duffy": "BWL",
+  "Rasikh Salam Dar": "BWL", "Maheesh Theekshana": "BWL", "Noor Ahmad": "BWL",
+  "Suyash Sharma": "BWL", "Ravi Bishnoi": "BWL", "Ben Dwarshuis": "BWL",
+  "Xavier Bartlett": "BWL", "Vijaykumar Vyshak": "BWL", "Yash Thakur": "BWL",
+  "Praveen Dubey": "BWL", "Mangesh Yadav": "BWL", "Richard Gleeson": "BWL",
+  "Abhinandan Singh": "BWL", "Vicky Ostwal": "BWL", "Blessing Muzarabani": "BWL",
+  "Vaibhav Arora": "BWL", "Pyla Avinash": "BWL", "Vishal Nishad": "BWL",
+  "Musheer Khan": "BAT", "Swapnil Singh": "AR", "Kanishk Chouhan": "BWL",
+  "Satvik Deswal": "BWL",
+};
+
 export default function FantasyTeamBuilderApp() {
   const [matchText, setMatchText] = useState("");
   const [players, setPlayers] = useState<Player[]>([]);
@@ -56,26 +109,25 @@ export default function FantasyTeamBuilderApp() {
   const [viceCaptain, setViceCaptain] = useState<string | null>(null);
 
   const [savedTeams, setSavedTeams] = useState<SavedTeam[]>([]);
+  const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
+
   const [activeTab, setActiveTab] = useState<Tab>("builder");
   const [previewId, setPreviewId] = useState<string | null>(null);
+
+  // Role memory — persists across sessions
+  const [roleMemory, setRoleMemory] = useState<Record<string, Role>>({});
 
   // ===== STORAGE =====
   useEffect(() => {
     try {
       const s = localStorage.getItem("ftb_saved_v1");
       if (s) setSavedTeams(JSON.parse(s));
-      const p = localStorage.getItem("ftb_players_v1");
-      if (p) {
-        const parsed = JSON.parse(p);
-        const migrated: Player[] = parsed.map((pl: any) => ({
-          name: pl.name,
-          team: pl.team,
-          role: (pl.role as Role) || (pl.isWk ? "WK" : "BAT"),
-        }));
-        setPlayers(migrated);
-      }
+      const p = localStorage.getItem("ftb_players_v2");
+      if (p) setPlayers(JSON.parse(p));
       const t = localStorage.getItem("ftb_teams_v1");
       if (t) setTeamNames(JSON.parse(t));
+      const r = localStorage.getItem("ftb_role_memory_v1");
+      if (r) setRoleMemory(JSON.parse(r));
     } catch {}
   }, []);
 
@@ -83,25 +135,37 @@ export default function FantasyTeamBuilderApp() {
     localStorage.setItem("ftb_saved_v1", JSON.stringify(savedTeams));
   }, [savedTeams]);
   useEffect(() => {
-    localStorage.setItem("ftb_players_v1", JSON.stringify(players));
+    localStorage.setItem("ftb_players_v2", JSON.stringify(players));
   }, [players]);
   useEffect(() => {
     localStorage.setItem("ftb_teams_v1", JSON.stringify(teamNames));
   }, [teamNames]);
+  useEffect(() => {
+    localStorage.setItem("ftb_role_memory_v1", JSON.stringify(roleMemory));
+  }, [roleMemory]);
+
+  // ===== HELPERS =====
+  const getRoleFor = (name: string, isWk: boolean): Role => {
+    if (roleMemory[name]) return roleMemory[name];
+    if (SEED_ROLES[name]) return SEED_ROLES[name];
+    if (isWk) return "WK";
+    return "BAT";
+  };
 
   // ===== PARSER =====
-  const parsePlayerList = (raw: string, team: string, limit: number): Player[] =>
-    raw
-      .split(",")
-      .map((p) => {
-        const isWk = /\(w\)/i.test(p);
-        const clean = p.replace(/\([^)]*\)/g, "").trim();
-        return clean
-          ? { name: clean, team, role: (isWk ? "WK" : "BAT") as Role }
-          : null;
-      })
-      .filter((p): p is Player => p !== null)
-      .slice(0, limit);
+  const parseTokens = (raw: string, team: string): { name: string; isWk: boolean }[] => {
+    const tokens = raw.split(",").map((s) => s.trim()).filter(Boolean);
+    const out: { name: string; isWk: boolean }[] = [];
+    for (const token of tokens) {
+      const isWk = /\(w\)/i.test(token);
+      const clean = token.replace(/\([^)]*\)/g, "").trim();
+      if (!clean) continue;
+      // Split alternates by "/"
+      const names = clean.split("/").map((s) => s.trim()).filter(Boolean);
+      for (const n of names) out.push({ name: n, isWk });
+    }
+    return out;
+  };
 
   const extractPlayingXI = () => {
     if (!matchText.trim()) {
@@ -121,43 +185,78 @@ export default function FantasyTeamBuilderApp() {
       });
       return;
     }
+
     const probableRegex = /Probable\s+X(?:II|I):\s*([^\n]+)/gi;
     const probables: string[] = [];
     while ((m = probableRegex.exec(matchText)) !== null) {
       probables.push(m[1].trim());
     }
-    const useProbable = probables.length >= teamData.length;
-    const extracted: Player[] = [];
+
+    const allPlayers: Player[] = [];
+
     teamData.forEach((td, idx) => {
-      const list = useProbable ? probables[idx] : td.squadList;
-      const limit = useProbable ? 12 : 11;
-      extracted.push(...parsePlayerList(list, td.name, limit));
+      const probableTokens = probables[idx]
+        ? parseTokens(probables[idx], td.name)
+        : [];
+      const probableNames = new Set(probableTokens.map((t) => t.name));
+
+      const squadTokens = parseTokens(td.squadList, td.name);
+      const seen = new Set<string>();
+
+      // Add probable first (in given order)
+      probableTokens.forEach((tk) => {
+        if (seen.has(tk.name)) return;
+        seen.add(tk.name);
+        allPlayers.push({
+          name: tk.name,
+          team: td.name,
+          role: getRoleFor(tk.name, tk.isWk),
+          probable: true,
+        });
+      });
+
+      // Then rest of squad
+      squadTokens.forEach((tk) => {
+        if (seen.has(tk.name)) return;
+        seen.add(tk.name);
+        allPlayers.push({
+          name: tk.name,
+          team: td.name,
+          role: getRoleFor(tk.name, tk.isWk),
+          probable: probableNames.has(tk.name),
+        });
+      });
     });
-    if (extracted.length === 0) {
+
+    if (allPlayers.length === 0) {
       setParseInfo({ msg: "No players parsed.", ok: false });
       return;
     }
-    setPlayers(extracted);
+
+    setPlayers(allPlayers);
     setTeamNames(teamData.map((t) => t.name));
     setSelection([]);
     setCaptain(null);
     setViceCaptain(null);
+    setEditingTeamId(null);
+
+    const probableCount = allPlayers.filter((p) => p.probable).length;
     setParseInfo({
-      msg: `Extracted ${extracted.length} players from ${teamData.length} teams ${
-        useProbable ? "(Probable XII)" : "(Squad first 11)"
-      }. Tap role badges to set WK/BAT/AR/BWL.`,
+      msg: `Extracted ${allPlayers.length} players (${probableCount} probable) from ${teamData.length} teams. ⭐ = probable XI.`,
       ok: true,
     });
   };
 
-  // ===== ROLE CYCLE =====
+  // ===== ROLE CYCLE — saves to memory =====
   const cycleRole = (name: string) => {
     setPlayers((prev) =>
-      prev.map((p) =>
-        p.name === name
-          ? { ...p, role: ROLES[(ROLES.indexOf(p.role) + 1) % ROLES.length] }
-          : p
-      )
+      prev.map((p) => {
+        if (p.name !== name) return p;
+        const newRole = ROLES[(ROLES.indexOf(p.role) + 1) % ROLES.length];
+        // Persist to memory
+        setRoleMemory((mem) => ({ ...mem, [name]: newRole }));
+        return { ...p, role: newRole };
+      })
     );
   };
 
@@ -186,11 +285,54 @@ export default function FantasyTeamBuilderApp() {
     if (captain === name) setCaptain(null);
   };
 
+  const validateTeam = (): boolean => {
+    if (selection.length !== 11) {
+      alert(`Need exactly 11 players. Currently: ${selection.length}`);
+      return false;
+    }
+    if (!captain) {
+      alert("Select a Captain (C).");
+      return false;
+    }
+    if (!viceCaptain) {
+      alert("Select a Vice-Captain (VC).");
+      return false;
+    }
+    return true;
+  };
+
+  // Save: update if editing, else create new
   const saveTeam = () => {
-    if (selection.length !== 11)
-      return alert(`Need exactly 11 players. Currently: ${selection.length}`);
-    if (!captain) return alert("Select a Captain (C).");
-    if (!viceCaptain) return alert("Select a Vice-Captain (VC).");
+    if (!validateTeam()) return;
+    if (editingTeamId) {
+      setSavedTeams((prev) =>
+        prev.map((t) =>
+          t.id === editingTeamId
+            ? { ...t, players: [...selection], captain, viceCaptain }
+            : t
+        )
+      );
+      setEditingTeamId(null);
+    } else {
+      setSavedTeams((prev) => [
+        ...prev,
+        {
+          id: `T_${Date.now()}`,
+          players: [...selection],
+          captain,
+          viceCaptain,
+          createdAt: Date.now(),
+        },
+      ]);
+    }
+    setSelection([]);
+    setCaptain(null);
+    setViceCaptain(null);
+  };
+
+  // Save as new — always creates a fresh team
+  const saveAsNew = () => {
+    if (!validateTeam()) return;
     setSavedTeams((prev) => [
       ...prev,
       {
@@ -201,32 +343,76 @@ export default function FantasyTeamBuilderApp() {
         createdAt: Date.now(),
       },
     ]);
+    setEditingTeamId(null);
     setSelection([]);
     setCaptain(null);
     setViceCaptain(null);
   };
 
   const clearCurrent = () => {
+    if (editingTeamId && !confirm("Cancel editing? Unsaved changes will be lost.")) return;
     setSelection([]);
     setCaptain(null);
     setViceCaptain(null);
+    setEditingTeamId(null);
   };
 
   const deleteTeam = (id: string) => {
     if (!confirm("Delete this team?")) return;
     setSavedTeams((prev) => prev.filter((t) => t.id !== id));
     if (previewId === id) setPreviewId(null);
+    if (editingTeamId === id) {
+      setEditingTeamId(null);
+      setSelection([]);
+      setCaptain(null);
+      setViceCaptain(null);
+    }
   };
 
-  const duplicateTeam = (t: SavedTeam) => {
+  const startEdit = (t: SavedTeam) => {
     setSelection([...t.players]);
     setCaptain(t.captain);
     setViceCaptain(t.viceCaptain);
+    setEditingTeamId(t.id);
     setPreviewId(null);
     setActiveTab("builder");
   };
 
-  // ===== HELPERS =====
+  const startDuplicate = (t: SavedTeam) => {
+    setSelection([...t.players]);
+    setCaptain(t.captain);
+    setViceCaptain(t.viceCaptain);
+    setEditingTeamId(null);
+    setPreviewId(null);
+    setActiveTab("builder");
+  };
+
+  // ===== RESET ALL =====
+  const resetAll = () => {
+    if (
+      !confirm(
+        "⚠️ Reset everything?\n\nThis will delete:\n• All saved teams\n• Current player pool\n• Match data\n\nRole memory will be kept. Cannot be undone."
+      )
+    )
+      return;
+    setSavedTeams([]);
+    setPlayers([]);
+    setTeamNames([]);
+    setSelection([]);
+    setCaptain(null);
+    setViceCaptain(null);
+    setMatchText("");
+    setParseInfo({ msg: "", ok: true });
+    setPreviewId(null);
+    setEditingTeamId(null);
+  };
+
+  const resetRoleMemory = () => {
+    if (!confirm("Clear role memory? All custom role mappings will be lost.")) return;
+    setRoleMemory({});
+  };
+
+  // ===== ANALYTICS =====
   const playerByName = (n: string) => players.find((p) => p.name === n);
   const teamForName = (n: string) => playerByName(n)?.team || "—";
   const roleForName = (n: string): Role => playerByName(n)?.role || "BAT";
@@ -270,7 +456,6 @@ export default function FantasyTeamBuilderApp() {
       .sort((a, b) => b.count - a.count);
   }, [savedTeams, players]);
 
-  // Only players that have been picked at least once
   const playerExposure = useMemo(() => {
     const counts: Record<string, number> = {};
     savedTeams.forEach((t) => {
@@ -363,16 +548,17 @@ export default function FantasyTeamBuilderApp() {
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
       <div className="max-w-7xl mx-auto p-6 space-y-6">
+        {/* Header */}
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-3xl md:text-4xl font-bold tracking-tight">
               Fantasy Team Builder
             </h1>
             <p className="text-zinc-400 text-sm mt-1">
-              Paste preview → extract → tag roles → build & track teams.
+              Paste preview → extract → build & track teams.
             </p>
           </div>
-          <div className="flex gap-3 text-sm">
+          <div className="flex gap-2 text-sm items-center">
             <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2">
               <span className="text-zinc-400">Saved: </span>
               <span className="font-semibold">{savedTeams.length}</span>
@@ -381,9 +567,17 @@ export default function FantasyTeamBuilderApp() {
               <span className="text-zinc-400">Pool: </span>
               <span className="font-semibold">{players.length}</span>
             </div>
+            <button
+              onClick={resetAll}
+              className="bg-red-600/20 border border-red-600/50 text-red-400 hover:bg-red-600/30 rounded-xl px-3 py-2 text-sm font-semibold"
+              title="Delete all teams & match data"
+            >
+              Reset All
+            </button>
           </div>
         </div>
 
+        {/* Tabs */}
         <div className="flex gap-2 border-b border-zinc-800 overflow-x-auto">
           {(
             [
@@ -407,8 +601,10 @@ export default function FantasyTeamBuilderApp() {
           ))}
         </div>
 
+        {/* ====== BUILDER ====== */}
         {activeTab === "builder" && (
           <div className="space-y-6">
+            {/* Input */}
             <div className="bg-zinc-900 rounded-2xl p-5 border border-zinc-800">
               <h2 className="text-xl font-semibold mb-3">1. Paste Match Context</h2>
               <textarea
@@ -468,6 +664,9 @@ export default function FantasyTeamBuilderApp() {
                       </div>
                     </div>
                   </div>
+                  <p className="text-xs text-zinc-500 mb-3">
+                    ⭐ = Probable XI · Tap role badge to change · Players outside probable also selectable
+                  </p>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {teamNames.map((tn) => {
@@ -494,7 +693,7 @@ export default function FantasyTeamBuilderApp() {
                               / {tp.length}
                             </div>
                           </div>
-                          <div className="space-y-1.5">
+                          <div className="space-y-1.5 max-h-[600px] overflow-y-auto pr-1">
                             {tp.map((p) => {
                               const isSelected = selection.includes(p.name);
                               return (
@@ -504,11 +703,18 @@ export default function FantasyTeamBuilderApp() {
                                   className={`p-2 rounded-lg cursor-pointer text-sm border transition-all flex items-center justify-between gap-2 ${
                                     isSelected
                                       ? "bg-green-600/15 border-green-500"
-                                      : "bg-zinc-900 border-zinc-800 hover:border-zinc-600"
+                                      : p.probable
+                                      ? "bg-zinc-900 border-zinc-700 hover:border-zinc-500"
+                                      : "bg-zinc-900/50 border-zinc-800/50 hover:border-zinc-700 opacity-70"
                                   }`}
                                 >
-                                  <div className="font-medium truncate">
-                                    {p.name}
+                                  <div className="flex items-center gap-1.5 min-w-0">
+                                    {p.probable && (
+                                      <span className="text-yellow-400 text-xs">⭐</span>
+                                    )}
+                                    <span className="font-medium truncate">
+                                      {p.name}
+                                    </span>
                                   </div>
                                   <button
                                     onClick={(e) => {
@@ -518,7 +724,7 @@ export default function FantasyTeamBuilderApp() {
                                     className={`text-[10px] font-bold px-2 py-0.5 rounded shrink-0 ${
                                       ROLE_BG[p.role]
                                     } hover:opacity-80`}
-                                    title="Tap to change role"
+                                    title="Tap to change role (saved permanently)"
                                   >
                                     {p.role}
                                   </button>
@@ -535,20 +741,44 @@ export default function FantasyTeamBuilderApp() {
                 {/* CURRENT TEAM */}
                 <div className="bg-zinc-900 rounded-2xl p-5 border border-zinc-800">
                   <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-                    <h2 className="text-xl font-semibold">3. Current Team</h2>
-                    <div className="flex gap-2">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <h2 className="text-xl font-semibold">3. Current Team</h2>
+                      {editingTeamId && (
+                        <span className="text-xs bg-orange-500/20 border border-orange-500/50 text-orange-300 px-2 py-1 rounded-md font-semibold">
+                          ✏️ EDITING Team #{savedTeams.findIndex(t => t.id === editingTeamId) + 1}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex gap-2 flex-wrap">
                       <button
                         onClick={clearCurrent}
                         className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs"
                       >
-                        Clear
+                        {editingTeamId ? "Cancel Edit" : "Clear"}
                       </button>
-                      <button
-                        onClick={saveTeam}
-                        className="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-xs font-semibold"
-                      >
-                        Save Team
-                      </button>
+                      {editingTeamId ? (
+                        <>
+                          <button
+                            onClick={saveTeam}
+                            className="px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-xs font-semibold"
+                          >
+                            Save Changes
+                          </button>
+                          <button
+                            onClick={saveAsNew}
+                            className="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-xs font-semibold"
+                          >
+                            Save as New
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={saveTeam}
+                          className="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-xs font-semibold"
+                        >
+                          Save Team
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -659,6 +889,7 @@ export default function FantasyTeamBuilderApp() {
           </div>
         )}
 
+        {/* ====== SAVED TEAMS ====== */}
         {activeTab === "saved" && (
           <div className="bg-zinc-900 rounded-2xl p-5 border border-zinc-800">
             <h2 className="text-xl font-semibold mb-4">Saved Teams</h2>
@@ -670,25 +901,36 @@ export default function FantasyTeamBuilderApp() {
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {savedTeams.map((t, idx) => {
                   const bd = teamBreakdown(t);
+                  const isEditing = editingTeamId === t.id;
                   return (
                     <div
                       key={t.id}
-                      className="bg-zinc-950 border border-zinc-800 rounded-2xl p-4 hover:border-green-500 cursor-pointer transition-colors"
-                      onClick={() => setPreviewId(t.id)}
+                      className={`bg-zinc-950 border rounded-2xl p-4 transition-colors ${
+                        isEditing
+                          ? "border-orange-500"
+                          : "border-zinc-800 hover:border-green-500"
+                      }`}
                     >
                       <div className="flex items-center justify-between mb-3">
-                        <div className="font-semibold">Team #{idx + 1}</div>
+                        <div className="font-semibold flex items-center gap-2">
+                          Team #{idx + 1}
+                          {isEditing && (
+                            <span className="text-[10px] bg-orange-500/30 text-orange-300 px-1.5 py-0.5 rounded">
+                              EDITING
+                            </span>
+                          )}
+                        </div>
                         <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deleteTeam(t.id);
-                          }}
+                          onClick={() => deleteTeam(t.id)}
                           className="text-xs text-zinc-500 hover:text-red-400"
                         >
                           Delete
                         </button>
                       </div>
-                      <div className="space-y-1.5 text-sm">
+                      <div
+                        className="space-y-1.5 text-sm cursor-pointer"
+                        onClick={() => setPreviewId(t.id)}
+                      >
                         {Object.entries(bd).map(([tn, c]) => {
                           const s = teamStyle(tn);
                           return (
@@ -713,6 +955,28 @@ export default function FantasyTeamBuilderApp() {
                           </div>
                         </div>
                       </div>
+                      <div className="flex gap-2 mt-3">
+                        <button
+                          onClick={() => setPreviewId(t.id)}
+                          className="flex-1 px-2 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs"
+                        >
+                          Preview
+                        </button>
+                        <button
+                          onClick={() => startEdit(t)}
+                          className="flex-1 px-2 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-xs font-semibold"
+                          title="Edit this team — saves over original"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => startDuplicate(t)}
+                          className="flex-1 px-2 py-1.5 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-xs"
+                          title="Load into builder as a new copy"
+                        >
+                          Duplicate
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
@@ -721,6 +985,7 @@ export default function FantasyTeamBuilderApp() {
           </div>
         )}
 
+        {/* PREVIEW MODAL */}
         {previewedTeam && (
           <div
             className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
@@ -730,14 +995,20 @@ export default function FantasyTeamBuilderApp() {
               className="bg-zinc-900 border border-zinc-700 rounded-2xl p-4 max-w-md w-full max-h-[90vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                 <h3 className="text-lg font-semibold">Team Preview</h3>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => duplicateTeam(previewedTeam)}
+                    onClick={() => startEdit(previewedTeam)}
+                    className="px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-xs font-semibold"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => startDuplicate(previewedTeam)}
                     className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs"
                   >
-                    Edit Copy
+                    Duplicate
                   </button>
                   <button
                     onClick={() => setPreviewId(null)}
@@ -783,6 +1054,7 @@ export default function FantasyTeamBuilderApp() {
           </div>
         )}
 
+        {/* ====== ANALYTICS ====== */}
         {activeTab === "analytics" && (
           <div className="space-y-6">
             {savedTeams.length === 0 ? (
@@ -793,9 +1065,7 @@ export default function FantasyTeamBuilderApp() {
               <>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <div className="bg-zinc-900 rounded-2xl p-5 border border-zinc-800">
-                    <h2 className="text-xl font-semibold mb-4">
-                      Captain Frequency
-                    </h2>
+                    <h2 className="text-xl font-semibold mb-4">Captain Frequency</h2>
                     {captainStats.length === 0 ? (
                       <div className="text-zinc-500 text-sm">No captains yet.</div>
                     ) : (
@@ -812,12 +1082,9 @@ export default function FantasyTeamBuilderApp() {
                                 <div className={`text-xs ${s.text}`}>{c.team}</div>
                               </div>
                               <div className="text-right">
-                                <div className="font-bold text-yellow-400">
-                                  {c.count}
-                                </div>
+                                <div className="font-bold text-yellow-400">{c.count}</div>
                                 <div className="text-[10px] text-zinc-500">
-                                  {((c.count / savedTeams.length) * 100).toFixed(0)}
-                                  %
+                                  {((c.count / savedTeams.length) * 100).toFixed(0)}%
                                 </div>
                               </div>
                             </div>
@@ -828,13 +1095,9 @@ export default function FantasyTeamBuilderApp() {
                   </div>
 
                   <div className="bg-zinc-900 rounded-2xl p-5 border border-zinc-800">
-                    <h2 className="text-xl font-semibold mb-4">
-                      Vice-Captain Frequency
-                    </h2>
+                    <h2 className="text-xl font-semibold mb-4">Vice-Captain Frequency</h2>
                     {vcStats.length === 0 ? (
-                      <div className="text-zinc-500 text-sm">
-                        No vice-captains yet.
-                      </div>
+                      <div className="text-zinc-500 text-sm">No vice-captains yet.</div>
                     ) : (
                       <div className="space-y-2">
                         {vcStats.map((c) => {
@@ -849,12 +1112,9 @@ export default function FantasyTeamBuilderApp() {
                                 <div className={`text-xs ${s.text}`}>{c.team}</div>
                               </div>
                               <div className="text-right">
-                                <div className="font-bold text-blue-400">
-                                  {c.count}
-                                </div>
+                                <div className="font-bold text-blue-400">{c.count}</div>
                                 <div className="text-[10px] text-zinc-500">
-                                  {((c.count / savedTeams.length) * 100).toFixed(0)}
-                                  %
+                                  {((c.count / savedTeams.length) * 100).toFixed(0)}%
                                 </div>
                               </div>
                             </div>
@@ -869,7 +1129,7 @@ export default function FantasyTeamBuilderApp() {
                   <h2 className="text-xl font-semibold mb-4">
                     Player Exposure
                     <span className="text-xs text-zinc-500 font-normal ml-2">
-                      (only players picked in at least 1 team)
+                      (picked players only)
                     </span>
                   </h2>
                   {playerExposure.length === 0 ? (
@@ -891,17 +1151,12 @@ export default function FantasyTeamBuilderApp() {
                             const s = teamStyle(p.team);
                             return (
                               <tr key={p.name} className="border-b border-zinc-900">
-                                <td className="py-2 pr-3 text-zinc-500">
-                                  {i + 1}
-                                </td>
+                                <td className="py-2 pr-3 text-zinc-500">{i + 1}</td>
                                 <td className="py-2 pr-3 font-medium">{p.name}</td>
                                 <td className={`py-2 pr-3 ${s.text}`}>{p.team}</td>
-                                <td className="py-2 pr-3 font-semibold">
-                                  {p.count}
-                                </td>
+                                <td className="py-2 pr-3 font-semibold">{p.count}</td>
                                 <td className="py-2 text-zinc-400">
-                                  {((p.count / savedTeams.length) * 100).toFixed(0)}
-                                  %
+                                  {((p.count / savedTeams.length) * 100).toFixed(0)}%
                                 </td>
                               </tr>
                             );
@@ -916,9 +1171,19 @@ export default function FantasyTeamBuilderApp() {
           </div>
         )}
 
+        {/* ====== PLAYERS INFO ====== */}
         {activeTab === "players" && (
           <div className="bg-zinc-900 rounded-2xl p-5 border border-zinc-800">
-            <h2 className="text-xl font-semibold mb-4">Players Info</h2>
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+              <h2 className="text-xl font-semibold">Players Info</h2>
+              <button
+                onClick={resetRoleMemory}
+                className="text-xs bg-zinc-800 hover:bg-zinc-700 px-3 py-1.5 rounded-lg"
+                title="Clear all custom role mappings"
+              >
+                Reset Role Memory ({Object.keys(roleMemory).length})
+              </button>
+            </div>
             {players.length === 0 ? (
               <div className="text-zinc-500 text-sm text-center py-8">
                 No players. Extract from a match first.
@@ -944,8 +1209,9 @@ export default function FantasyTeamBuilderApp() {
                             key={p.name}
                             className="bg-zinc-950 border border-zinc-800 rounded-lg p-2.5 text-sm flex items-center justify-between"
                           >
-                            <div>
-                              <span className="text-zinc-500 mr-2">{i + 1}.</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-zinc-500 mr-1">{i + 1}.</span>
+                              {p.probable && <span className="text-yellow-400 text-xs">⭐</span>}
                               {p.name}
                             </div>
                             <button
