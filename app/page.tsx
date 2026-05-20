@@ -45,14 +45,13 @@ const TEAM_COLORS = [
 
 // ============ SEED PLAYER ROLES (IPL) ============
 const SEED_ROLES: Record<string, Role> = {
-  // Wicketkeepers
   "MS Dhoni": "WK", "Rishabh Pant": "WK", "Sanju Samson": "WK", "KL Rahul": "WK",
   "Quinton de Kock": "WK", "Jos Buttler": "WK", "Jitesh Sharma": "WK",
   "Phil Salt": "WK", "Philip Salt": "WK", "Ishan Kishan": "WK",
   "Prabhsimran Singh": "WK", "Heinrich Klaasen": "WK", "Jonny Bairstow": "WK",
   "Dhruv Jurel": "WK", "Wriddhiman Saha": "WK", "Jordan Cox": "WK",
-  "N Jagadeesan": "WK", "Vishnu Vinod": "WK", "Kumar Sangakkara": "WK",
-  // Batters
+  "N Jagadeesan": "WK", "Vishnu Vinod": "WK", "Ryan Rickelton": "WK",
+  "Angkrish Raghuvanshi": "BAT",
   "Virat Kohli": "BAT", "Rohit Sharma": "BAT", "Shubman Gill": "BAT",
   "Yashasvi Jaiswal": "BAT", "Suryakumar Yadav": "BAT", "Devdutt Padikkal": "BAT",
   "Shreyas Iyer": "BAT", "Rajat Patidar": "BAT", "Tilak Varma": "BAT",
@@ -63,7 +62,8 @@ const SEED_ROLES: Record<string, Role> = {
   "Karun Nair": "BAT", "Aiden Markram": "BAT", "Rinku Singh": "BAT",
   "Mayank Agarwal": "BAT", "Nehal Wadhera": "BAT", "Harnoor Singh": "BAT",
   "Vihaan Malhotra": "BAT", "Anuj Rawat": "BAT", "Abhishek Porel": "BAT",
-  // All-rounders
+  "Ajinkya Rahane": "BAT", "Finn Allen": "BAT", "Manish Pandey": "BAT",
+  "Naman Dhir": "BAT",
   "Hardik Pandya": "AR", "Krunal Pandya": "AR", "Ravindra Jadeja": "AR",
   "Axar Patel": "AR", "Glenn Maxwell": "AR", "Cameron Green": "AR",
   "Andre Russell": "AR", "Sunil Narine": "AR", "Marcus Stoinis": "AR",
@@ -74,7 +74,7 @@ const SEED_ROLES: Record<string, Role> = {
   "Suryansh Shedge": "AR", "Washington Sundar": "AR", "Sai Kishore": "AR",
   "R Sai Kishore": "AR", "Liam Livingstone": "AR", "Moeen Ali": "AR",
   "Wanindu Hasaranga": "AR", "Dunith Wellalage": "AR", "Ramandeep Singh": "AR",
-  // Bowlers
+  "Anukul Roy": "AR", "Corbin Bosch": "AR",
   "Jasprit Bumrah": "BWL", "Mohammed Shami": "BWL", "Mohammed Siraj": "BWL",
   "Arshdeep Singh": "BWL", "Yuzvendra Chahal": "BWL", "Kuldeep Yadav": "BWL",
   "Rashid Khan": "BWL", "Rashid-Khan": "BWL", "Lockie Ferguson": "BWL",
@@ -108,13 +108,15 @@ export default function FantasyTeamBuilderApp() {
   const [captain, setCaptain] = useState<string | null>(null);
   const [viceCaptain, setViceCaptain] = useState<string | null>(null);
 
+  // NEW: swap mode state
+  const [swapTargetName, setSwapTargetName] = useState<string | null>(null);
+
   const [savedTeams, setSavedTeams] = useState<SavedTeam[]>([]);
   const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
 
   const [activeTab, setActiveTab] = useState<Tab>("builder");
   const [previewId, setPreviewId] = useState<string | null>(null);
 
-  // Role memory — persists across sessions
   const [roleMemory, setRoleMemory] = useState<Record<string, Role>>({});
 
   // ===== STORAGE =====
@@ -160,7 +162,6 @@ export default function FantasyTeamBuilderApp() {
       const isWk = /\(w\)/i.test(token);
       const clean = token.replace(/\([^)]*\)/g, "").trim();
       if (!clean) continue;
-      // Split alternates by "/"
       const names = clean.split("/").map((s) => s.trim()).filter(Boolean);
       for (const n of names) out.push({ name: n, isWk });
     }
@@ -187,25 +188,51 @@ export default function FantasyTeamBuilderApp() {
     }
 
     const probableRegex = /Probable\s+X(?:II|I):\s*([^\n]+)/gi;
-    const probables: string[] = [];
+    const probableLists: string[] = [];
     while ((m = probableRegex.exec(matchText)) !== null) {
-      probables.push(m[1].trim());
+      probableLists.push(m[1].trim());
     }
 
+    // ===== CONTENT-BASED MATCHING (the fix) =====
+    // For each team, find the probable XII list whose players have the MOST
+    // overlap with that team's squad. This handles the case where Probable XII
+    // and Squad: appear in different orders in the source text.
+    const teamProbableMap: Record<string, { name: string; isWk: boolean }[]> = {};
+    const assignedIdx = new Set<number>();
+
+    teamData.forEach((td) => {
+      const squadNames = new Set(parseTokens(td.squadList, td.name).map((t) => t.name));
+      let bestIdx = -1;
+      let bestOverlap = -1;
+      probableLists.forEach((prob, idx) => {
+        if (assignedIdx.has(idx)) return;
+        const probTokens = parseTokens(prob, "");
+        const overlap = probTokens.filter((t) => squadNames.has(t.name)).length;
+        if (overlap > bestOverlap) {
+          bestOverlap = overlap;
+          bestIdx = idx;
+        }
+      });
+      if (bestIdx !== -1 && bestOverlap > 0) {
+        assignedIdx.add(bestIdx);
+        teamProbableMap[td.name] = parseTokens(probableLists[bestIdx], td.name);
+      }
+    });
+
+    // Build final player list
     const allPlayers: Player[] = [];
-
-    teamData.forEach((td, idx) => {
-      const probableTokens = probables[idx]
-        ? parseTokens(probables[idx], td.name)
-        : [];
+    teamData.forEach((td) => {
+      const probableTokens = teamProbableMap[td.name] || [];
       const probableNames = new Set(probableTokens.map((t) => t.name));
-
       const squadTokens = parseTokens(td.squadList, td.name);
       const seen = new Set<string>();
 
-      // Add probable first (in given order)
+      // Probable XI first (in given order, only if they're actually in squad)
       probableTokens.forEach((tk) => {
         if (seen.has(tk.name)) return;
+        // Only include if in this team's squad (safety net)
+        const inSquad = squadTokens.some((s) => s.name === tk.name);
+        if (!inSquad) return;
         seen.add(tk.name);
         allPlayers.push({
           name: tk.name,
@@ -239,38 +266,61 @@ export default function FantasyTeamBuilderApp() {
     setCaptain(null);
     setViceCaptain(null);
     setEditingTeamId(null);
+    setSwapTargetName(null);
 
     const probableCount = allPlayers.filter((p) => p.probable).length;
+    const matchedTeams = Object.keys(teamProbableMap).length;
     setParseInfo({
-      msg: `Extracted ${allPlayers.length} players (${probableCount} probable) from ${teamData.length} teams. ⭐ = probable XI.`,
+      msg: `Extracted ${allPlayers.length} players (${probableCount} probable across ${matchedTeams}/${teamData.length} teams). ⭐ = probable XI.`,
       ok: true,
     });
   };
 
-  // ===== ROLE CYCLE — saves to memory =====
+  // ===== ROLE CYCLE =====
   const cycleRole = (name: string) => {
     setPlayers((prev) =>
       prev.map((p) => {
         if (p.name !== name) return p;
         const newRole = ROLES[(ROLES.indexOf(p.role) + 1) % ROLES.length];
-        // Persist to memory
         setRoleMemory((mem) => ({ ...mem, [name]: newRole }));
         return { ...p, role: newRole };
       })
     );
   };
 
-  // ===== TEAM BUILDING =====
+  // ===== TEAM BUILDING (with swap mode) =====
   const togglePlayer = (name: string) => {
-    setSelection((prev) => {
-      if (prev.includes(name)) {
-        if (captain === name) setCaptain(null);
-        if (viceCaptain === name) setViceCaptain(null);
-        return prev.filter((n) => n !== name);
-      }
-      if (prev.length >= 11) return prev;
-      return [...prev, name];
-    });
+    // Already selected → deselect
+    if (selection.includes(name)) {
+      if (swapTargetName === name) setSwapTargetName(null);
+      setSelection((prev) => prev.filter((n) => n !== name));
+      if (captain === name) setCaptain(null);
+      if (viceCaptain === name) setViceCaptain(null);
+      return;
+    }
+
+    // Swap mode armed → replace
+    if (swapTargetName) {
+      const target = swapTargetName;
+      setSelection((prev) => prev.map((n) => (n === target ? name : n)));
+      if (captain === target) setCaptain(name);
+      if (viceCaptain === target) setViceCaptain(name);
+      setSwapTargetName(null);
+      return;
+    }
+
+    if (selection.length >= 11) {
+      alert(
+        "11 players already selected. Tap ⇄ on a selected player to swap, or tap × to remove one first."
+      );
+      return;
+    }
+    setSelection((prev) => [...prev, name]);
+  };
+
+  const armSwap = (name: string) => {
+    if (!selection.includes(name)) return;
+    setSwapTargetName((prev) => (prev === name ? null : name));
   };
 
   const makeCaptain = (name: string) => {
@@ -301,7 +351,6 @@ export default function FantasyTeamBuilderApp() {
     return true;
   };
 
-  // Save: update if editing, else create new
   const saveTeam = () => {
     if (!validateTeam()) return;
     if (editingTeamId) {
@@ -328,9 +377,9 @@ export default function FantasyTeamBuilderApp() {
     setSelection([]);
     setCaptain(null);
     setViceCaptain(null);
+    setSwapTargetName(null);
   };
 
-  // Save as new — always creates a fresh team
   const saveAsNew = () => {
     if (!validateTeam()) return;
     setSavedTeams((prev) => [
@@ -347,6 +396,7 @@ export default function FantasyTeamBuilderApp() {
     setSelection([]);
     setCaptain(null);
     setViceCaptain(null);
+    setSwapTargetName(null);
   };
 
   const clearCurrent = () => {
@@ -355,6 +405,7 @@ export default function FantasyTeamBuilderApp() {
     setCaptain(null);
     setViceCaptain(null);
     setEditingTeamId(null);
+    setSwapTargetName(null);
   };
 
   const deleteTeam = (id: string) => {
@@ -375,6 +426,7 @@ export default function FantasyTeamBuilderApp() {
     setViceCaptain(t.viceCaptain);
     setEditingTeamId(t.id);
     setPreviewId(null);
+    setSwapTargetName(null);
     setActiveTab("builder");
   };
 
@@ -384,10 +436,10 @@ export default function FantasyTeamBuilderApp() {
     setViceCaptain(t.viceCaptain);
     setEditingTeamId(null);
     setPreviewId(null);
+    setSwapTargetName(null);
     setActiveTab("builder");
   };
 
-  // ===== RESET ALL =====
   const resetAll = () => {
     if (
       !confirm(
@@ -405,6 +457,7 @@ export default function FantasyTeamBuilderApp() {
     setParseInfo({ msg: "", ok: true });
     setPreviewId(null);
     setEditingTeamId(null);
+    setSwapTargetName(null);
   };
 
   const resetRoleMemory = () => {
@@ -548,7 +601,6 @@ export default function FantasyTeamBuilderApp() {
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
       <div className="max-w-7xl mx-auto p-6 space-y-6">
-        {/* Header */}
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-3xl md:text-4xl font-bold tracking-tight">
@@ -570,14 +622,12 @@ export default function FantasyTeamBuilderApp() {
             <button
               onClick={resetAll}
               className="bg-red-600/20 border border-red-600/50 text-red-400 hover:bg-red-600/30 rounded-xl px-3 py-2 text-sm font-semibold"
-              title="Delete all teams & match data"
             >
               Reset All
             </button>
           </div>
         </div>
 
-        {/* Tabs */}
         <div className="flex gap-2 border-b border-zinc-800 overflow-x-auto">
           {(
             [
@@ -601,10 +651,8 @@ export default function FantasyTeamBuilderApp() {
           ))}
         </div>
 
-        {/* ====== BUILDER ====== */}
         {activeTab === "builder" && (
           <div className="space-y-6">
-            {/* Input */}
             <div className="bg-zinc-900 rounded-2xl p-5 border border-zinc-800">
               <h2 className="text-xl font-semibold mb-3">1. Paste Match Context</h2>
               <textarea
@@ -640,6 +688,25 @@ export default function FantasyTeamBuilderApp() {
 
             {players.length > 0 && (
               <>
+                {/* SWAP MODE BANNER */}
+                {swapTargetName && (
+                  <div className="bg-orange-600/20 border-2 border-orange-500 rounded-xl p-3 flex items-center justify-between flex-wrap gap-2">
+                    <div className="text-sm">
+                      <span className="font-bold text-orange-300">🔄 SWAP MODE</span>
+                      <span className="text-zinc-300 ml-2">
+                        Tap any player below to swap with{" "}
+                        <span className="font-semibold text-white">{swapTargetName}</span>
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => setSwapTargetName(null)}
+                      className="px-3 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs"
+                    >
+                      Cancel Swap
+                    </button>
+                  </div>
+                )}
+
                 {/* SPLIT POOL */}
                 <div className="bg-zinc-900 rounded-2xl p-5 border border-zinc-800">
                   <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
@@ -665,7 +732,7 @@ export default function FantasyTeamBuilderApp() {
                     </div>
                   </div>
                   <p className="text-xs text-zinc-500 mb-3">
-                    ⭐ = Probable XI · Tap role badge to change · Players outside probable also selectable
+                    ⭐ = Probable XI · Tap role badge to change · ⇄ on selected player to swap
                   </p>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -696,13 +763,19 @@ export default function FantasyTeamBuilderApp() {
                           <div className="space-y-1.5 max-h-[600px] overflow-y-auto pr-1">
                             {tp.map((p) => {
                               const isSelected = selection.includes(p.name);
+                              const isSwapArmed = swapTargetName === p.name;
+                              const isSwapCandidate = swapTargetName !== null && !isSelected;
                               return (
                                 <div
                                   key={p.name}
                                   onClick={() => togglePlayer(p.name)}
                                   className={`p-2 rounded-lg cursor-pointer text-sm border transition-all flex items-center justify-between gap-2 ${
-                                    isSelected
+                                    isSwapArmed
+                                      ? "bg-orange-600/20 border-orange-500 ring-2 ring-orange-500/50"
+                                      : isSelected
                                       ? "bg-green-600/15 border-green-500"
+                                      : isSwapCandidate
+                                      ? "bg-zinc-900 border-orange-500/30 hover:border-orange-500 hover:bg-orange-600/10"
                                       : p.probable
                                       ? "bg-zinc-900 border-zinc-700 hover:border-zinc-500"
                                       : "bg-zinc-900/50 border-zinc-800/50 hover:border-zinc-700 opacity-70"
@@ -745,7 +818,7 @@ export default function FantasyTeamBuilderApp() {
                       <h2 className="text-xl font-semibold">3. Current Team</h2>
                       {editingTeamId && (
                         <span className="text-xs bg-orange-500/20 border border-orange-500/50 text-orange-300 px-2 py-1 rounded-md font-semibold">
-                          ✏️ EDITING Team #{savedTeams.findIndex(t => t.id === editingTeamId) + 1}
+                          ✏️ EDITING Team #{savedTeams.findIndex((t) => t.id === editingTeamId) + 1}
                         </span>
                       )}
                     </div>
@@ -809,12 +882,15 @@ export default function FantasyTeamBuilderApp() {
                       const p = playerByName(name);
                       const isCap = captain === name;
                       const isVc = viceCaptain === name;
+                      const isSwapArmed = swapTargetName === name;
                       const s = p ? teamStyle(p.team) : null;
                       return (
                         <div
                           key={name}
                           className={`bg-zinc-950 border rounded-lg p-2.5 flex items-center justify-between gap-2 ${
-                            isCap
+                            isSwapArmed
+                              ? "border-orange-500 ring-2 ring-orange-500/50 bg-orange-600/10"
+                              : isCap
                               ? "border-yellow-500"
                               : isVc
                               ? "border-blue-500"
@@ -823,9 +899,7 @@ export default function FantasyTeamBuilderApp() {
                         >
                           <div className="flex-1 min-w-0">
                             <div className="font-medium text-sm flex items-center gap-1.5 flex-wrap">
-                              <span className="text-zinc-500 text-xs">
-                                {i + 1}.
-                              </span>
+                              <span className="text-zinc-500 text-xs">{i + 1}.</span>
                               <span className="truncate">{name}</span>
                               {p && (
                                 <span
@@ -846,6 +920,11 @@ export default function FantasyTeamBuilderApp() {
                                   VC
                                 </span>
                               )}
+                              {isSwapArmed && (
+                                <span className="text-[10px] bg-orange-500 text-black px-1.5 rounded font-bold animate-pulse">
+                                  SWAP
+                                </span>
+                              )}
                             </div>
                             {p && (
                               <div className={`text-xs ${s!.text} mt-0.5`}>
@@ -861,6 +940,7 @@ export default function FantasyTeamBuilderApp() {
                                   ? "bg-yellow-500 text-black"
                                   : "bg-zinc-800 hover:bg-zinc-700"
                               }`}
+                              title="Captain"
                             >
                               C
                             </button>
@@ -869,12 +949,25 @@ export default function FantasyTeamBuilderApp() {
                               className={`w-7 h-7 rounded-md text-xs font-bold ${
                                 isVc ? "bg-blue-500" : "bg-zinc-800 hover:bg-zinc-700"
                               }`}
+                              title="Vice-Captain"
                             >
                               VC
                             </button>
                             <button
+                              onClick={() => armSwap(name)}
+                              className={`w-7 h-7 rounded-md text-xs font-bold ${
+                                isSwapArmed
+                                  ? "bg-orange-500 text-black"
+                                  : "bg-zinc-800 hover:bg-orange-600"
+                              }`}
+                              title="Swap — tap then tap any pool player"
+                            >
+                              ⇄
+                            </button>
+                            <button
                               onClick={() => togglePlayer(name)}
                               className="w-7 h-7 rounded-md text-xs bg-zinc-800 hover:bg-red-600"
+                              title="Remove"
                             >
                               ×
                             </button>
@@ -889,7 +982,6 @@ export default function FantasyTeamBuilderApp() {
           </div>
         )}
 
-        {/* ====== SAVED TEAMS ====== */}
         {activeTab === "saved" && (
           <div className="bg-zinc-900 rounded-2xl p-5 border border-zinc-800">
             <h2 className="text-xl font-semibold mb-4">Saved Teams</h2>
@@ -965,14 +1057,12 @@ export default function FantasyTeamBuilderApp() {
                         <button
                           onClick={() => startEdit(t)}
                           className="flex-1 px-2 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-xs font-semibold"
-                          title="Edit this team — saves over original"
                         >
                           Edit
                         </button>
                         <button
                           onClick={() => startDuplicate(t)}
                           className="flex-1 px-2 py-1.5 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-xs"
-                          title="Load into builder as a new copy"
                         >
                           Duplicate
                         </button>
@@ -985,7 +1075,6 @@ export default function FantasyTeamBuilderApp() {
           </div>
         )}
 
-        {/* PREVIEW MODAL */}
         {previewedTeam && (
           <div
             className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
@@ -1054,7 +1143,6 @@ export default function FantasyTeamBuilderApp() {
           </div>
         )}
 
-        {/* ====== ANALYTICS ====== */}
         {activeTab === "analytics" && (
           <div className="space-y-6">
             {savedTeams.length === 0 ? (
@@ -1171,7 +1259,6 @@ export default function FantasyTeamBuilderApp() {
           </div>
         )}
 
-        {/* ====== PLAYERS INFO ====== */}
         {activeTab === "players" && (
           <div className="bg-zinc-900 rounded-2xl p-5 border border-zinc-800">
             <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
@@ -1179,7 +1266,6 @@ export default function FantasyTeamBuilderApp() {
               <button
                 onClick={resetRoleMemory}
                 className="text-xs bg-zinc-800 hover:bg-zinc-700 px-3 py-1.5 rounded-lg"
-                title="Clear all custom role mappings"
               >
                 Reset Role Memory ({Object.keys(roleMemory).length})
               </button>
