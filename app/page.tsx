@@ -207,6 +207,10 @@ export default function FantasyTeamBuilderApp() {
   const [activeTab, setActiveTab] = useState<Tab>("builder");
   const [previewId, setPreviewId] = useState<string | null>(null);
 
+  const [tableFilterCap, setTableFilterCap] = useState<string>("");
+  const [tableFilterVC, setTableFilterVC] = useState<string>("");
+  const [tableFilterPlayer, setTableFilterPlayer] = useState<string>("");
+
   const [roleMemory, setRoleMemory] = useState<Record<string, Role>>({});
 
   // ===== STORAGE =====
@@ -628,6 +632,42 @@ export default function FantasyTeamBuilderApp() {
       .map(([name, count]) => ({ name, count, team: teamForName(name) }))
       .sort((a, b) => b.count - a.count);
   }, [savedTeams, players]);
+
+  const uniqueCaps = useMemo(() => {
+    const set = new Set<string>();
+    savedTeams.forEach((t) => { if (t.captain) set.add(t.captain); });
+    return Array.from(set).sort();
+  }, [savedTeams]);
+
+  const uniqueVCs = useMemo(() => {
+    const set = new Set<string>();
+    savedTeams.forEach((t) => { if (t.viceCaptain) set.add(t.viceCaptain); });
+    return Array.from(set).sort();
+  }, [savedTeams]);
+
+  const filteredTableTeams = useMemo(() => {
+    return savedTeams.filter((t) => {
+      if (tableFilterCap && t.captain !== tableFilterCap) return false;
+      if (tableFilterVC && t.viceCaptain !== tableFilterVC) return false;
+      if (tableFilterPlayer && !t.players.includes(tableFilterPlayer)) return false;
+      return true;
+    });
+  }, [savedTeams, tableFilterCap, tableFilterVC, tableFilterPlayer]);
+
+  const highlightedTeamIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (let i = 0; i < savedTeams.length; i++) {
+      for (let j = i + 1; j < savedTeams.length; j++) {
+        const setA = new Set(savedTeams[i].players);
+        const common = savedTeams[j].players.filter((p) => setA.has(p));
+        if (common.length >= 9) {
+          ids.add(savedTeams[i].id);
+          ids.add(savedTeams[j].id);
+        }
+      }
+    }
+    return ids;
+  }, [savedTeams]);
 
   const teamBreakdown = (t: SavedTeam) => {
     const c: Record<string, number> = {};
@@ -1203,10 +1243,10 @@ export default function FantasyTeamBuilderApp() {
         )}
         {activeTab === "table" && (
           <div className="bg-zinc-900 rounded-2xl p-5 border border-zinc-800 overflow-x-auto">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
               <h2 className="text-xl font-semibold">Teams Table View</h2>
               <span className="text-zinc-500 text-xs">
-                {savedTeams.length} teams
+                {filteredTableTeams.length} / {savedTeams.length} teams
               </span>
             </div>
 
@@ -1215,79 +1255,177 @@ export default function FantasyTeamBuilderApp() {
                 No teams yet. Go to Builder.
               </div>
             ) : (
-              <table className="w-full text-sm min-w-[800px]">
-                <thead>
-                  <tr className="border-b border-zinc-700 text-zinc-400 text-left text-xs uppercase tracking-wider">
-                    <th className="py-3 px-2 font-semibold">Team</th>
-                    <th className="py-3 px-2 font-semibold">C</th>
-                    <th className="py-3 px-2 font-semibold">VC</th>
-                    <th className="py-3 px-2 font-semibold">XI</th>
-                    <th className="py-3 px-2 font-semibold whitespace-nowrap">
-                      {teamNames
-                        .map((t) =>
-                          t
-                            .split(" ")
-                            .map((w) => w[0])
-                            .join(""),
-                        )
-                        .join("-")}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {savedTeams.map((t, idx) => {
-                    const bd = teamBreakdown(t);
-                    const counts = teamNames.map((tn) => bd[tn] || 0).join("-");
-                    return (
-                      <tr
-                        key={t.id}
-                        className="border-b border-zinc-800 hover:bg-zinc-950/50 cursor-pointer"
-                        onClick={() => setPreviewId(t.id)}
+              <>
+                {/* Filters */}
+                <div className="flex flex-wrap gap-3 mb-4">
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-zinc-400 font-semibold uppercase tracking-wide">
+                      CAP
+                    </label>
+                    <select
+                      value={tableFilterCap}
+                      onChange={(e) => setTableFilterCap(e.target.value)}
+                      className="bg-zinc-800 border border-zinc-700 text-white text-xs rounded-lg px-2 py-1.5 outline-none focus:border-yellow-500"
+                    >
+                      <option value="">All Captains</option>
+                      {uniqueCaps.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-zinc-400 font-semibold uppercase tracking-wide">
+                      VC
+                    </label>
+                    <select
+                      value={tableFilterVC}
+                      onChange={(e) => setTableFilterVC(e.target.value)}
+                      className="bg-zinc-800 border border-zinc-700 text-white text-xs rounded-lg px-2 py-1.5 outline-none focus:border-blue-500"
+                    >
+                      <option value="">All Vice-Captains</option>
+                      {uniqueVCs.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {tableFilterPlayer && (
+                    <div className="flex items-center gap-2 bg-purple-600/20 border border-purple-500/50 rounded-lg px-3 py-1.5">
+                      <span className="text-xs text-purple-300 font-medium">
+                        Player: {tableFilterPlayer}
+                      </span>
+                      <button
+                        onClick={() => setTableFilterPlayer("")}
+                        className="text-purple-400 hover:text-purple-200 text-xs font-bold"
                       >
-                        <td className="py-3 px-2 font-bold align-top">
-                          T{idx + 1}
-                        </td>
-                        <td className="py-3 px-2 text-yellow-400 font-medium align-top whitespace-nowrap">
-                          {t.captain}
-                        </td>
-                        <td className="py-3 px-2 text-blue-400 font-medium align-top whitespace-nowrap">
-                          {t.viceCaptain}
-                        </td>
-                        <td className="py-3 px-2 align-top">
-                          <div className="text-zinc-300 leading-relaxed">
-                            {t.players.map((pn, i) => {
-                              const p = playerByName(pn);
-                              const isWk = p?.role === "WK";
-                              const isC = pn === t.captain;
-                              const isVc = pn === t.viceCaptain;
-                              return (
-                                <span key={pn}>
-                                  <span
-                                    className={
-                                      isC
-                                        ? "font-bold text-yellow-400"
-                                        : isVc
-                                          ? "font-bold text-blue-400"
-                                          : ""
-                                    }
-                                  >
-                                    {pn}
-                                    {isWk ? "(wk)" : ""}
+                        ×
+                      </button>
+                    </div>
+                  )}
+                  {(tableFilterCap || tableFilterVC || tableFilterPlayer) && (
+                    <button
+                      onClick={() => {
+                        setTableFilterCap("");
+                        setTableFilterVC("");
+                        setTableFilterPlayer("");
+                      }}
+                      className="text-xs text-zinc-400 hover:text-white bg-zinc-800 hover:bg-zinc-700 px-3 py-1.5 rounded-lg"
+                    >
+                      Clear Filters
+                    </button>
+                  )}
+                </div>
+
+                {highlightedTeamIds.size > 0 && (
+                  <div className="mb-3 flex items-center gap-2 text-xs text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2">
+                    <span className="font-bold">⚠</span>
+                    <span>
+                      Highlighted rows share 9+ players with another team
+                    </span>
+                  </div>
+                )}
+
+                <table className="w-full text-sm min-w-[800px]">
+                  <thead>
+                    <tr className="border-b border-zinc-700 text-zinc-400 text-left text-xs uppercase tracking-wider">
+                      <th className="py-3 px-2 font-semibold">Team</th>
+                      <th className="py-3 px-2 font-semibold">C</th>
+                      <th className="py-3 px-2 font-semibold">VC</th>
+                      <th className="py-3 px-2 font-semibold">XI</th>
+                      <th className="py-3 px-2 font-semibold whitespace-nowrap">
+                        {teamNames
+                          .map((t) =>
+                            t
+                              .split(" ")
+                              .map((w) => w[0])
+                              .join(""),
+                          )
+                          .join("-")}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredTableTeams.map((t) => {
+                      const idx = savedTeams.indexOf(t);
+                      const bd = teamBreakdown(t);
+                      const counts = teamNames.map((tn) => bd[tn] || 0).join("-");
+                      const isHighlighted = highlightedTeamIds.has(t.id);
+                      return (
+                        <tr
+                          key={t.id}
+                          className={`border-b cursor-pointer transition-colors ${
+                            isHighlighted
+                              ? "border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/15"
+                              : "border-zinc-800 hover:bg-zinc-950/50"
+                          }`}
+                          onClick={() => setPreviewId(t.id)}
+                        >
+                          <td className="py-3 px-2 font-bold align-top whitespace-nowrap">
+                            T{idx + 1}
+                            {isHighlighted && (
+                              <span className="ml-1 text-amber-400 text-xs">
+                                ⚠
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-2 text-yellow-400 font-medium align-top whitespace-nowrap">
+                            {t.captain}
+                          </td>
+                          <td className="py-3 px-2 text-blue-400 font-medium align-top whitespace-nowrap">
+                            {t.viceCaptain}
+                          </td>
+                          <td className="py-3 px-2 align-top">
+                            <div className="text-zinc-300 leading-relaxed">
+                              {t.players.map((pn, i) => {
+                                const p = playerByName(pn);
+                                const isWk = p?.role === "WK";
+                                const isC = pn === t.captain;
+                                const isVc = pn === t.viceCaptain;
+                                const isFiltered = pn === tableFilterPlayer;
+                                return (
+                                  <span key={pn}>
+                                    <span
+                                      className={
+                                        isFiltered
+                                          ? "font-bold text-purple-400 underline"
+                                          : isC
+                                            ? "font-bold text-yellow-400"
+                                            : isVc
+                                              ? "font-bold text-blue-400"
+                                              : ""
+                                      }
+                                    >
+                                      {pn}
+                                      {isWk ? "(wk)" : ""}
+                                    </span>
+                                    {i < t.players.length - 1 ? ", " : ""}
                                   </span>
-                                  {i < t.players.length - 1 ? ", " : ""}
-                                </span>
-                              );
-                            })}
-                          </div>
-                        </td>
-                        <td className="py-3 px-2 font-bold align-top whitespace-nowrap">
-                          {counts}
+                                );
+                              })}
+                            </div>
+                          </td>
+                          <td className="py-3 px-2 font-bold align-top whitespace-nowrap">
+                            {counts}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {filteredTableTeams.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={5}
+                          className="py-10 text-center text-zinc-500 text-sm"
+                        >
+                          No teams match the current filters.
                         </td>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                    )}
+                  </tbody>
+                </table>
+              </>
             )}
           </div>
         )}
@@ -1469,6 +1607,9 @@ export default function FantasyTeamBuilderApp() {
                     <div className="text-zinc-500 text-sm">No picks yet.</div>
                   ) : (
                     <div className="overflow-x-auto">
+                      <p className="text-xs text-zinc-500 mb-2">
+                        Click a player to filter teams in Table View
+                      </p>
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="border-b border-zinc-800 text-zinc-400 text-left">
@@ -1485,13 +1626,22 @@ export default function FantasyTeamBuilderApp() {
                             return (
                               <tr
                                 key={p.name}
-                                className="border-b border-zinc-900"
+                                className="border-b border-zinc-900 hover:bg-zinc-950/60 cursor-pointer group"
+                                onClick={() => {
+                                  setTableFilterPlayer(p.name);
+                                  setTableFilterCap("");
+                                  setTableFilterVC("");
+                                  setActiveTab("table");
+                                }}
                               >
                                 <td className="py-2 pr-3 text-zinc-500">
                                   {i + 1}
                                 </td>
-                                <td className="py-2 pr-3 font-medium">
+                                <td className="py-2 pr-3 font-medium group-hover:text-purple-400 transition-colors">
                                   {p.name}
+                                  <span className="ml-1 opacity-0 group-hover:opacity-100 text-[10px] text-purple-400 transition-opacity">
+                                    → filter
+                                  </span>
                                 </td>
                                 <td className={`py-2 pr-3 ${s.text}`}>
                                   {p.team}
