@@ -654,22 +654,6 @@ export default function FantasyTeamBuilderApp() {
     });
   }, [savedTeams, tableFilterCap, tableFilterVC, tableFilterPlayer]);
 
-<<<<<<< ours
-  const highlightedTeamIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (let i = 0; i < savedTeams.length; i++) {
-      for (let j = i + 1; j < savedTeams.length; j++) {
-        const setA = new Set(savedTeams[i].players);
-        const common = savedTeams[j].players.filter((p) => setA.has(p));
-        if (common.length >= 9) {
-          ids.add(savedTeams[i].id);
-          ids.add(savedTeams[j].id);
-        }
-      }
-    }
-    return ids;
-  }, [savedTeams]);
-=======
   const overlapData = useMemo(() => {
     const highlightedIds = new Set<string>();
     const pairs: { a: string; b: string; common: number }[] = [];
@@ -692,7 +676,6 @@ export default function FantasyTeamBuilderApp() {
     return { highlightedIds, pairs, matchMap };
   }, [savedTeams]);
   const highlightedTeamIds = overlapData.highlightedIds;
->>>>>>> theirs
 
   const teamBreakdown = (t: SavedTeam) => {
     const c: Record<string, number> = {};
@@ -1344,14 +1327,6 @@ export default function FantasyTeamBuilderApp() {
                   )}
                 </div>
 
-<<<<<<< ours
-                {highlightedTeamIds.size > 0 && (
-                  <div className="mb-3 flex items-center gap-2 text-xs text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2">
-                    <span className="font-bold">⚠</span>
-                    <span>
-                      Highlighted rows share 9+ players with another team
-                    </span>
-=======
                 {overlapData.pairs.length > 0 && (
                   <div className="mb-3 text-xs text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2 space-y-1">
                     <div className="font-bold">⚠ Teams sharing 9+ players:</div>
@@ -1369,7 +1344,6 @@ export default function FantasyTeamBuilderApp() {
                         );
                       })}
                     </div>
->>>>>>> theirs
                   </div>
                 )}
 
@@ -1411,11 +1385,6 @@ export default function FantasyTeamBuilderApp() {
                           <td className="py-3 px-2 font-bold align-top whitespace-nowrap">
                             T{idx + 1}
                             {isHighlighted && (
-<<<<<<< ours
-                              <span className="ml-1 text-amber-400 text-xs">
-                                ⚠
-                              </span>
-=======
                               <div className="text-amber-400 text-[10px] font-normal mt-0.5">
                                 ⚠ matches:{" "}
                                 {(overlapData.matchMap[t.id] || [])
@@ -1425,7 +1394,6 @@ export default function FantasyTeamBuilderApp() {
                                   })
                                   .join(", ")}
                               </div>
->>>>>>> theirs
                             )}
                           </td>
                           <td className="py-3 px-2 text-yellow-400 font-medium align-top whitespace-nowrap">
